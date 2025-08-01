@@ -1,0 +1,341 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.widgets import Slider, Button
+
+class ParticleSwarmOptimization:
+    def __init__(self, num_particles=30, dimensions=2, 
+                 w=0.7, c1=1.5, c2=1.5, max_iter=100,
+                 bounds=None, objective_function=None):
+        """
+        Initialize PSO with parameters:
+        - num_particles: Number of particles in the swarm
+        - dimensions: Dimensionality of the problem
+        - w: Inertia weight
+        - c1: Cognitive coefficient
+        - c2: Social coefficient
+        - max_iter: Maximum number of iterations
+        - bounds: List of tuples [(min, max)] for each dimension
+        - objective_function: Function to minimize
+        """
+        self.num_particles = num_particles
+        self.dimensions = dimensions
+        self.w = w
+        self.c1 = c1
+        self.c2 = c2
+        self.max_iter = max_iter
+        self.bounds = bounds if bounds else [(-5, 5)] * dimensions
+        self.objective_function = objective_function if objective_function else self.sphere_function
+        
+        # Initialize particles and velocities
+        self.particles = np.random.uniform(low=[b[0] for b in self.bounds],
+                                         high=[b[1] for b in self.bounds],
+                                         size=(self.num_particles, self.dimensions))
+        self.velocities = np.zeros((self.num_particles, self.dimensions))
+        
+        # Initialize personal bests and global best
+        self.personal_bests = self.particles.copy()
+        self.personal_best_values = np.array([self.objective_function(p) for p in self.particles])
+        self.global_best = self.personal_bests[np.argmin(self.personal_best_values)]
+        self.global_best_value = np.min(self.personal_best_values)
+        
+        # History for visualization
+        self.history = []
+        self.global_best_history = []
+        
+    @staticmethod
+    def sphere_function(x):
+        """Sphere function (simple convex function for testing)"""
+        return np.sum(x**2)
+    
+    @staticmethod
+    def rastrigin_function(x):
+        """Rastrigin function (multimodal test function)"""
+        return 10 * len(x) + np.sum(x**2 - 10 * np.cos(2 * np.pi * x))
+    
+    def update_particles(self):
+        """Update particle positions and velocities"""
+        r1 = np.random.random((self.num_particles, self.dimensions))
+        r2 = np.random.random((self.num_particles, self.dimensions))
+        
+        # Update velocities
+        cognitive = self.c1 * r1 * (self.personal_bests - self.particles)
+        social = self.c2 * r2 * (self.global_best - self.particles)
+        self.velocities = self.w * self.velocities + cognitive + social
+        
+        # Update positions
+        self.particles += self.velocities
+        
+        # Apply bounds
+        for i in range(self.dimensions):
+            self.particles[:, i] = np.clip(self.particles[:, i], 
+                                         self.bounds[i][0], 
+                                         self.bounds[i][1])
+        
+        # Evaluate new positions
+        current_values = np.array([self.objective_function(p) for p in self.particles])
+        
+        # Update personal bests
+        improved_indices = current_values < self.personal_best_values
+        self.personal_bests[improved_indices] = self.particles[improved_indices]
+        self.personal_best_values[improved_indices] = current_values[improved_indices]
+        
+        # Update global best
+        if np.min(current_values) < self.global_best_value:
+            self.global_best = self.particles[np.argmin(current_values)]
+            self.global_best_value = np.min(current_values)
+        
+        # Save history for visualization
+        self.history.append(self.particles.copy())
+        self.global_best_history.append(self.global_best.copy())
+    
+    def run(self):
+        """Run the PSO algorithm"""
+        for _ in range(self.max_iter):
+            self.update_particles()
+            
+    def visualize_2d(self):
+        """Visualize the optimization process in 2D"""
+        if self.dimensions != 2:
+            print("Visualization only works for 2D problems")
+            return
+            
+        # Create meshgrid for contour plot
+        x = np.linspace(self.bounds[0][0], self.bounds[0][1], 100)
+        y = np.linspace(self.bounds[1][0], self.bounds[1][1], 100)
+        X, Y = np.meshgrid(x, y)
+        Z = np.array([self.objective_function(np.array([xi, yi])) for xi, yi in zip(X.ravel(), Y.ravel())]).reshape(X.shape)
+        
+        fig, ax = plt.subplots(figsize=(10, 8))
+        
+        # Plot contour
+        contour = ax.contourf(X, Y, Z, levels=50, cmap='viridis')
+        plt.colorbar(contour, label='Objective Function Value')
+        
+        # Initialize scatter plot for particles
+        particles_scatter = ax.scatter([], [], c='red', s=30, label='Particles')
+        global_best_scatter = ax.scatter([], [], c='white', s=100, marker='*', label='Global Best')
+        
+        ax.set_xlim(self.bounds[0][0], self.bounds[0][1])
+        ax.set_ylim(self.bounds[1][0], self.bounds[1][1])
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_title('Particle Swarm Optimization')
+        ax.legend()
+        
+        def update(frame):
+            """Update function for animation"""
+            particles = self.history[frame]
+            global_best = self.global_best_history[frame]
+            
+            particles_scatter.set_offsets(particles)
+            global_best_scatter.set_offsets([global_best])
+            
+            ax.set_title(f'PSO Iteration {frame+1}/{self.max_iter}\n'
+                        f'Best Value: {self.global_best_value:.4f}')
+            return particles_scatter, global_best_scatter
+        
+        anim = FuncAnimation(fig, update, frames=len(self.history), 
+                            interval=200, blit=True)
+        plt.show()
+        return anim
+    
+    def visualize_3d(self):
+        """Visualize the optimization process in 3D"""
+        if self.dimensions != 2:
+            print("Visualization only works for 2D problems")
+            return
+            
+        # Create meshgrid for surface plot
+        x = np.linspace(self.bounds[0][0], self.bounds[0][1], 100)
+        y = np.linspace(self.bounds[1][0], self.bounds[1][1], 100)
+        X, Y = np.meshgrid(x, y)
+        Z = np.array([self.objective_function(np.array([xi, yi])) for xi, yi in zip(X.ravel(), Y.ravel())]).reshape(X.shape)
+        
+        fig = plt.figure(figsize=(12, 8))
+        ax = fig.add_subplot(111, projection='3d')
+        
+        # Plot surface
+        ax.plot_surface(X, Y, Z, cmap='viridis', alpha=0.6)
+        
+        # Initialize scatter plot for particles
+        particles_scatter = ax.scatter([], [], [], c='red', s=30, label='Particles')
+        global_best_scatter = ax.scatter([], [], [], c='white', s=100, marker='*', label='Global Best')
+        
+        ax.set_xlim(self.bounds[0][0], self.bounds[0][1])
+        ax.set_ylim(self.bounds[1][0], self.bounds[1][1])
+        ax.set_zlim(np.min(Z), np.max(Z))
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Objective Value')
+        ax.set_title('Particle Swarm Optimization - 3D View')
+        ax.legend()
+        
+        def update(frame):
+            """Update function for animation"""
+            particles = self.history[frame]
+            global_best = self.global_best_history[frame]
+            z_values = np.array([self.objective_function(p) for p in particles])
+            global_best_z = self.objective_function(global_best)
+            
+            particles_scatter._offsets3d = (particles[:, 0], particles[:, 1], z_values)
+            global_best_scatter._offsets3d = ([global_best[0]], [global_best[1]], [global_best_z])
+            
+            ax.set_title(f'PSO Iteration {frame+1}/{self.max_iter}\n'
+                        f'Best Value: {self.global_best_value:.4f}')
+            return particles_scatter, global_best_scatter
+        
+        anim = FuncAnimation(fig, update, frames=len(self.history), 
+                            interval=200, blit=True)
+        plt.show()
+        return anim
+    
+    def plot_convergence(self):
+        """Plot the convergence of the global best value"""
+        plt.figure(figsize=(10, 6))
+        best_values = [self.objective_function(gb) for gb in self.global_best_history]
+        plt.plot(best_values, 'b-', linewidth=2)
+        plt.xlabel('Iteration')
+        plt.ylabel('Best Objective Value')
+        plt.title('PSO Convergence')
+        plt.grid(True)
+        plt.show()
+
+def interactive_pso_demo():
+    """Interactive PSO demo with parameter controls"""
+    # Setup figure and axes
+    fig = plt.figure(figsize=(14, 8))
+    ax_contour = fig.add_subplot(121)
+    ax_convergence = fig.add_subplot(122)
+    
+    # Adjust layout for sliders
+    plt.subplots_adjust(bottom=0.3)
+    
+    # Default parameters
+    default_params = {
+        'num_particles': 30,
+        'w': 0.7,
+        'c1': 1.5,
+        'c2': 1.5,
+        'max_iter': 50
+    }
+    
+    # Initial PSO run
+    pso = ParticleSwarmOptimization(
+        num_particles=default_params['num_particles'],
+        w=default_params['w'],
+        c1=default_params['c1'],
+        c2=default_params['c2'],
+        max_iter=default_params['max_iter'],
+        objective_function=ParticleSwarmOptimization.rastrigin_function
+    )
+    pso.run()
+    
+    # Create meshgrid for contour plot
+    x = np.linspace(pso.bounds[0][0], pso.bounds[0][1], 100)
+    y = np.linspace(pso.bounds[1][0], pso.bounds[1][1], 100)
+    X, Y = np.meshgrid(x, y)
+    Z = np.array([pso.objective_function(np.array([xi, yi])) for xi, yi in zip(X.ravel(), Y.ravel())]).reshape(X.shape)
+    
+    # Plot contour
+    contour = ax_contour.contourf(X, Y, Z, levels=50, cmap='viridis')
+    plt.colorbar(contour, ax=ax_contour, label='Objective Function Value')
+    particles_scatter = ax_contour.scatter([], [], c='red', s=30, label='Particles')
+    global_best_scatter = ax_contour.scatter([], [], c='white', s=100, marker='*', label='Global Best')
+    ax_contour.set_xlim(pso.bounds[0][0], pso.bounds[0][1])
+    ax_contour.set_ylim(pso.bounds[1][0], pso.bounds[1][1])
+    ax_contour.set_xlabel('X')
+    ax_contour.set_ylabel('Y')
+    ax_contour.set_title('Particle Swarm Optimization')
+    ax_contour.legend()
+    
+    # Plot convergence
+    convergence_line, = ax_convergence.plot([], [], 'b-', linewidth=2)
+    ax_convergence.set_xlabel('Iteration')
+    ax_convergence.set_ylabel('Best Objective Value')
+    ax_convergence.set_title('PSO Convergence')
+    ax_convergence.grid(True)
+    
+    # Create sliders
+    axcolor = 'lightgoldenrodyellow'
+    ax_num = plt.axes([0.2, 0.25, 0.65, 0.03], facecolor=axcolor)
+    ax_w = plt.axes([0.2, 0.20, 0.65, 0.03], facecolor=axcolor)
+    ax_c1 = plt.axes([0.2, 0.15, 0.65, 0.03], facecolor=axcolor)
+    ax_c2 = plt.axes([0.2, 0.10, 0.65, 0.03], facecolor=axcolor)
+    ax_iter = plt.axes([0.2, 0.05, 0.65, 0.03], facecolor=axcolor)
+    
+    s_num = Slider(ax_num, 'Particles', 5, 100, valinit=default_params['num_particles'], valstep=1)
+    s_w = Slider(ax_w, 'Inertia (w)', 0.1, 1.5, valinit=default_params['w'])
+    s_c1 = Slider(ax_c1, 'Cognitive (c1)', 0.1, 3.0, valinit=default_params['c1'])
+    s_c2 = Slider(ax_c2, 'Social (c2)', 0.1, 3.0, valinit=default_params['c2'])
+    s_iter = Slider(ax_iter, 'Iterations', 10, 200, valinit=default_params['max_iter'], valstep=1)
+    
+    # Reset button
+    resetax = plt.axes([0.8, 0.01, 0.1, 0.04])
+    button = Button(resetax, 'Reset', color=axcolor, hovercolor='0.975')
+    
+    def update(val):
+        """Update the visualization with new parameters"""
+        # Create new PSO instance with current parameters
+        pso = ParticleSwarmOptimization(
+            num_particles=int(s_num.val),
+            w=s_w.val,
+            c1=s_c1.val,
+            c2=s_c2.val,
+            max_iter=int(s_iter.val),
+            objective_function=ParticleSwarmOptimization.rastrigin_function
+        )
+        pso.run()
+        
+        # Update contour plot
+        particles_scatter.set_offsets(pso.history[-1])
+        global_best_scatter.set_offsets([pso.global_best_history[-1]])
+        ax_contour.set_title(f'PSO - Final Iteration\nBest Value: {pso.global_best_value:.4f}')
+        
+        # Update convergence plot
+        best_values = [pso.objective_function(gb) for gb in pso.global_best_history]
+        convergence_line.set_data(range(len(best_values)), best_values)
+        ax_convergence.relim()
+        ax_convergence.autoscale_view()
+        ax_convergence.set_title(f'Convergence - Final Value: {best_values[-1]:.4f}')
+        
+        fig.canvas.draw_idle()
+    
+    def reset(event):
+        """Reset all parameters to defaults"""
+        s_num.reset()
+        s_w.reset()
+        s_c1.reset()
+        s_c2.reset()
+        s_iter.reset()
+    
+    # Register update functions
+    s_num.on_changed(update)
+    s_w.on_changed(update)
+    s_c1.on_changed(update)
+    s_c2.on_changed(update)
+    s_iter.on_changed(update)
+    button.on_clicked(reset)
+    
+    # Initial update
+    update(None)
+    
+    plt.show()
+
+if __name__ == "__main__":
+    print("Particle Swarm Optimization Demo")
+    
+    # Simple non-interactive demo
+    print("\nRunning basic PSO on Sphere function...")
+    pso = ParticleSwarmOptimization(
+        num_particles=20,
+        dimensions=2,
+        objective_function=ParticleSwarmOptimization.sphere_function
+    )
+    pso.run()
+    pso.plot_convergence()
+    
+    # Uncomment to run interactive demo
+    # print("\nLaunching interactive PSO demo on Rastrigin function...")
+    # interactive_pso_demo()
