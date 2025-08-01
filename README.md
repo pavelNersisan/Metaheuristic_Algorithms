@@ -4,7 +4,10 @@ A collection of modern metaheuristic optimization algorithms implemented in Pyth
 Key Features:
 🐜 Ant Colony Optimization for combinatorial problems
 
+<img width="822" height="723" alt="image" src="https://github.com/user-attachments/assets/7f0e4493-7b80-4873-9270-2daf8043bbce" />
+
 🧬 Genetic Algorithm for evolutionary optimization
+<img width="1177" height="590" alt="image" src="https://github.com/user-attachments/assets/0137a931-225b-4a72-900d-12f5728e9fb6" />
 
 🐦 Particle Swarm Optimization for continuous problems
 
