@@ -1,0 +1,149 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import random
+from matplotlib.animation import FuncAnimation
+from itertools import combinations
+
+class ACO_TSP:
+    def __init__(self, num_ants=10, evaporation_rate=0.5, alpha=1, beta=2, iterations=50):
+        self.num_ants = num_ants
+        self.evaporation_rate = evaporation_rate
+        self.alpha = alpha  # اهمیت فرومون
+        self.beta = beta    # اهمیت فاصله
+        self.iterations = iterations
+        self.cities = None
+        self.num_cities = 0
+        self.distances = None
+        self.pheromones = None
+        self.best_path = None
+        self.best_distance = float('inf')
+        self.fig, self.ax = plt.subplots(figsize=(10, 8))
+        self.animation = None
+        
+    def initialize_cities(self, num_cities=10, area_size=100):
+        """ تولید شهرها به صورت تصادفی """
+        self.num_cities = num_cities
+        self.cities = np.random.rand(num_cities, 2) * area_size
+        self._calculate_distances()
+        self._initialize_pheromones()
+        
+    def _calculate_distances(self):
+        """ محاسبه ماتریس فاصله بین شهرها """
+        self.distances = np.zeros((self.num_cities, self.num_cities))
+        for i, j in combinations(range(self.num_cities), 2):
+            dist = np.linalg.norm(self.cities[i] - self.cities[j])
+            self.distances[i, j] = dist
+            self.distances[j, i] = dist
+            
+    def _initialize_pheromones(self):
+        """ مقداردهی اولیه فرومون‌ها """
+        initial_pheromone = 1.0 / (self.num_cities * np.mean(self.distances))
+        self.pheromones = np.ones((self.num_cities, self.num_cities)) * initial_pheromone
+        
+    def _select_next_city(self, current_city, visited):
+        """ انتخاب شهر بعدی برای مورچه """
+        unvisited = [city for city in range(self.num_cities) if city not in visited]
+        probabilities = []
+        
+        for city in unvisited:
+            pheromone = self.pheromones[current_city, city] ** self.alpha
+            visibility = (1.0 / self.distances[current_city, city]) ** self.beta
+            probabilities.append(pheromone * visibility)
+            
+        probabilities = np.array(probabilities)
+        probabilities /= probabilities.sum()
+        
+        return np.random.choice(unvisited, p=probabilities)
+    
+    def _construct_solutions(self):
+        """ ساخت مسیر برای تمام مورچه‌ها """
+        all_paths = []
+        all_distances = []
+        
+        for _ in range(self.num_ants):
+            path = [random.randint(0, self.num_cities - 1)]
+            for _ in range(self.num_cities - 1):
+                next_city = self._select_next_city(path[-1], path)
+                path.append(next_city)
+            
+            # بازگشت به شهر اول
+            path.append(path[0])
+            distance = sum(self.distances[path[i], path[i+1]] for i in range(self.num_cities))
+            
+            all_paths.append(path)
+            all_distances.append(distance)
+            
+            # به‌روزرسانی بهترین مسیر
+            if distance < self.best_distance:
+                self.best_distance = distance
+                self.best_path = path.copy()
+                
+        return all_paths, all_distances
+    
+    def _update_pheromones(self, all_paths, all_distances):
+        """ به‌روزرسانی فرومون‌ها """
+        # تبخیر فرومون
+        self.pheromones *= (1 - self.evaporation_rate)
+        
+        # رسوب فرومون جدید
+        for path, distance in zip(all_paths, all_distances):
+            for i in range(self.num_cities):
+                self.pheromones[path[i], path[i+1]] += 1.0 / distance
+                self.pheromones[path[i+1], path[i]] += 1.0 / distance
+                
+    def _plot_state(self, iteration, paths=None):
+        """ نمایش گرافیکی وضعیت فعلی """
+        self.ax.clear()
+        
+        # نمایش شهرها
+        self.ax.scatter(self.cities[:, 0], self.cities[:, 1], c='red', s=100)
+        for i, city in enumerate(self.cities):
+            self.ax.text(city[0], city[1], str(i), fontsize=12)
+        
+        # نمایش مسیرها
+        if paths:
+            for path in paths:
+                path_cities = self.cities[path]
+                self.ax.plot(path_cities[:, 0], path_cities[:, 1], 'b-', alpha=0.3)
+        
+        # نمایش بهترین مسیر
+        if self.best_path is not None:
+            best_path_cities = self.cities[self.best_path]
+            self.ax.plot(best_path_cities[:, 0], best_path_cities[:, 1], 'g-', linewidth=2)
+        
+        self.ax.set_title(f'ACO Iteration: {iteration+1}/{self.iterations}\n'
+                         f'Best Distance: {self.best_distance:.2f}\n'
+                         f'Ants: {self.num_ants}  Evap: {self.evaporation_rate}  α: {self.alpha}  β: {self.beta}')
+        plt.pause(0.5)
+        
+    def run(self):
+        """ اجرای الگوریتم ACO """
+        self.initialize_cities()
+        
+        for iteration in range(self.iterations):
+            all_paths, all_distances = self._construct_solutions()
+            self._update_pheromones(all_paths, all_distances)
+            self._plot_state(iteration, all_paths)
+            
+        plt.show()
+        
+    def get_user_parameters(self):
+        """ دریافت پارامترها از کاربر """
+        print("=== ACO Parameter Configuration ===")
+        self.num_ants = int(input("Number of ants (default 10): ") or 10)
+        self.evaporation_rate = float(input("Evaporation rate (0-1, default 0.5): ") or 0.5)
+        self.alpha = float(input("Alpha (pheromone importance, default 1): ") or 1)
+        self.beta = float(input("Beta (distance importance, default 2): ") or 2)
+        self.iterations = int(input("Number of iterations (default 50): ") or 50)
+        num_cities = int(input("Number of cities (default 10): ") or 10)
+        area_size = int(input("Area size (default 100): ") or 100)
+        
+        self.initialize_cities(num_cities, area_size)
+
+#program execution
+
+if __name__ == "__main__":
+    aco = ACO_TSP()
+    aco.get_user_parameters()
+    aco.run()
+    
