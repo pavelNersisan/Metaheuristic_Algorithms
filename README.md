@@ -10,6 +10,7 @@ Key Features:
 <img width="1177" height="590" alt="image" src="https://github.com/user-attachments/assets/0137a931-225b-4a72-900d-12f5728e9fb6" />
 
 🐦 Particle Swarm Optimization for continuous problems
+<img width="846" height="547" alt="image" src="https://github.com/user-attachments/assets/d17bb827-045c-4b4e-b509-be3523d66900" />
 
 📊 Visualization tools to track algorithm performance
 
