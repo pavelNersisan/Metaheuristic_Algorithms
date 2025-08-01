@@ -1,0 +1,230 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.widgets import Slider, Button
+from mpl_toolkits.mplot3d import Axes3D
+
+class EvolutionaryAlgorithm:
+    def __init__(self, population_size=50, gene_length=20, mutation_rate=0.01, 
+                 crossover_rate=0.7, selection_pressure=2, elitism=True):
+        """
+        Initialize the evolutionary algorithm with parameters:
+        - population_size: Number of individuals in each generation
+        - gene_length: Length of the chromosome for each individual
+        - mutation_rate: Probability of mutation for each gene
+        - crossover_rate: Probability of crossover between parents
+        - selection_pressure: Pressure for selection (higher = more selective)
+        - elitism: Whether to carry best individuals to next generation
+        """
+        self.population_size = population_size
+        self.gene_length = gene_length
+        self.mutation_rate = mutation_rate
+        self.crossover_rate = crossover_rate
+        self.selection_pressure = selection_pressure
+        self.elitism = elitism
+        self.population = None
+        self.fitness_history = []
+        self.best_individual_history = []
+        self.avg_fitness_history = []
+        
+    def initialize_population(self):
+        """Initialize a random population of binary strings"""
+        self.population = np.random.randint(0, 2, size=(self.population_size, self.gene_length))
+        
+    def evaluate_fitness(self, individual):
+        """
+        Fitness function - counts the number of 1s in the binary string
+        (Simple example - can be replaced with any custom fitness function)
+        """
+        return np.sum(individual)
+    
+    def tournament_selection(self):
+        """Select parents using tournament selection"""
+        selected = []
+        for _ in range(self.population_size):
+            # Randomly select k individuals for tournament
+            k = min(self.selection_pressure, self.population_size)
+            contestants = np.random.choice(range(self.population_size), size=k, replace=False)
+            # Select the best one
+            fitnesses = [self.evaluate_fitness(self.population[i]) for i in contestants]
+            winner = contestants[np.argmax(fitnesses)]
+            selected.append(self.population[winner].copy())
+        return np.array(selected)
+    
+    def crossover(self, parent1, parent2):
+        """Perform single-point crossover between two parents"""
+        if np.random.random() < self.crossover_rate:
+            crossover_point = np.random.randint(1, self.gene_length)
+            child1 = np.concatenate([parent1[:crossover_point], parent2[crossover_point:]])
+            child2 = np.concatenate([parent2[:crossover_point], parent1[crossover_point:]])
+            return child1, child2
+        return parent1.copy(), parent2.copy()
+    
+    def mutate(self, individual):
+        """Perform bit-flip mutation on an individual"""
+        for i in range(self.gene_length):
+            if np.random.random() < self.mutation_rate:
+                individual[i] = 1 - individual[i]
+        return individual
+    
+    def run_generation(self):
+        """Run one generation of the evolutionary algorithm"""
+        # Evaluate current population
+        fitnesses = np.array([self.evaluate_fitness(ind) for ind in self.population])
+        self.fitness_history.append(np.max(fitnesses))
+        self.avg_fitness_history.append(np.mean(fitnesses))
+        best_idx = np.argmax(fitnesses)
+        self.best_individual_history.append(self.population[best_idx].copy())
+        
+        # Selection
+        selected = self.tournament_selection()
+        
+        # Crossover
+        new_population = []
+        if self.elitism:
+            # Keep the best individual
+            new_population.append(self.population[best_idx].copy())
+            
+        for i in range(0, len(selected) - (1 if self.elitism else 0), 2):
+            if i+1 >= len(selected):
+                break  # Skip if odd number of selected individuals
+            child1, child2 = self.crossover(selected[i], selected[i+1])
+            new_population.extend([child1, child2])
+        
+        # Mutation
+        for i in range(len(new_population)):
+            new_population[i] = self.mutate(new_population[i])
+            
+        # Ensure population size stays constant
+        self.population = np.array(new_population[:self.population_size])
+        
+    def run(self, generations=100):
+        """Run the evolutionary algorithm for a number of generations"""
+        self.initialize_population()
+        for _ in range(generations):
+            self.run_generation()
+            
+    def plot_results(self):
+        """Plot the fitness progression over generations"""
+        plt.figure(figsize=(12, 6))
+        
+        plt.subplot(1, 2, 1)
+        plt.plot(self.fitness_history, label='Best Fitness')
+        plt.plot(self.avg_fitness_history, label='Average Fitness')
+        plt.xlabel('Generation')
+        plt.ylabel('Fitness')
+        plt.title('Fitness Progression')
+        plt.legend()
+        plt.grid(True)
+        
+        plt.subplot(1, 2, 2)
+        # Plot the best individual's genes
+        best_genes = np.array(self.best_individual_history)
+        plt.imshow(best_genes.T, cmap='binary', aspect='auto')
+        plt.xlabel('Generation')
+        plt.ylabel('Gene Position')
+        plt.title('Best Individual Genes Over Time')
+        plt.colorbar(label='Gene Value (0/1)')
+        
+        plt.tight_layout()
+        plt.show()
+
+# Interactive simulation function
+def interactive_simulation():
+    # Create initial algorithm instance
+    ea = EvolutionaryAlgorithm()
+    ea.run(50)  # Run with default parameters
+    
+    # Create the figure and subplots
+    fig = plt.figure(figsize=(14, 8))
+    ax1 = fig.add_subplot(2, 2, 1)
+    ax2 = fig.add_subplot(2, 2, 2)
+    ax3 = fig.add_subplot(2, 2, (3, 4))
+    
+    # Adjust layout for sliders
+    plt.subplots_adjust(bottom=0.3)
+    
+    # Initial plots
+    fitness_line, = ax1.plot(ea.fitness_history, label='Best Fitness')
+    avg_line, = ax1.plot(ea.avg_fitness_history, label='Avg Fitness')
+    ax1.set_title('Fitness Progression')
+    ax1.set_xlabel('Generation')
+    ax1.set_ylabel('Fitness')
+    ax1.legend()
+    ax1.grid(True)
+    
+    best_genes = np.array(ea.best_individual_history)
+    gene_img = ax2.imshow(best_genes.T, cmap='binary', aspect='auto')
+    ax2.set_title('Best Individual Genes')
+    ax2.set_xlabel('Generation')
+    ax2.set_ylabel('Gene Position')
+    
+    # Current generation population visualization
+    pop_img = ax3.imshow(ea.population, cmap='binary', aspect='auto')
+    ax3.set_title('Current Population (Generation 50)')
+    ax3.set_xlabel('Gene Position')
+    ax3.set_ylabel('Individual')
+    
+    # Create sliders
+    axcolor = 'lightgoldenrodyellow'
+    ax_mut = plt.axes([0.2, 0.2, 0.65, 0.03], facecolor=axcolor)
+    ax_cross = plt.axes([0.2, 0.15, 0.65, 0.03], facecolor=axcolor)
+    ax_pressure = plt.axes([0.2, 0.1, 0.65, 0.03], facecolor=axcolor)
+    
+    s_mut = Slider(ax_mut, 'Mutation Rate', 0.0, 0.2, valinit=ea.mutation_rate)
+    s_cross = Slider(ax_cross, 'Crossover Rate', 0.0, 1.0, valinit=ea.crossover_rate)
+    s_pressure = Slider(ax_pressure, 'Selection Pressure', 1, 10, valinit=ea.selection_pressure, valstep=1)
+    
+    # Reset button
+    resetax = plt.axes([0.8, 0.025, 0.1, 0.04])
+    button = Button(resetax, 'Reset', color=axcolor, hovercolor='0.975')
+    
+    def update(val):
+        # Update algorithm parameters
+        ea.mutation_rate = s_mut.val
+        ea.crossover_rate = s_cross.val
+        ea.selection_pressure = int(s_pressure.val)
+        
+        # Rerun the algorithm
+        ea.initialize_population()
+        ea.run(50)
+        
+        # Update plots
+        fitness_line.set_ydata(ea.fitness_history)
+        avg_line.set_ydata(ea.avg_fitness_history)
+        ax1.relim()
+        ax1.autoscale_view()
+        
+        best_genes = np.array(ea.best_individual_history)
+        gene_img.set_data(best_genes.T)
+        gene_img.autoscale()
+        
+        pop_img.set_data(ea.population)
+        pop_img.autoscale()
+        
+        ax3.set_title(f'Current Population (Generation 50)')
+        
+        fig.canvas.draw_idle()
+    
+    def reset(event):
+        s_mut.reset()
+        s_cross.reset()
+        s_pressure.reset()
+    
+    # Register update functions
+    s_mut.on_changed(update)
+    s_cross.on_changed(update)
+    s_pressure.on_changed(update)
+    button.on_clicked(reset)
+    
+    plt.show()
+
+if __name__ == "__main__":
+    # Simple non-interactive run
+    print("Running evolutionary algorithm with default parameters...")
+    ea = EvolutionaryAlgorithm()
+    ea.run(100)
+    ea.plot_results()
+    
+    # Uncomment to run interactive simulation
+    # print("Launching interactive simulation...")
+    # interactive_simulation()
